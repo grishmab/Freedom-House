@@ -1,0 +1,204 @@
+---
+title: "Freedom House Data Visualization"
+author: "Grishma Bhattarai"
+date: "2/17/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#installing and calling all the necessary packages 
+install.packages("openxlsx")
+library(openxlsx)
+install.packages(tidyr) 
+library("tidyr")
+install.packages("reshape2") 
+library(reshape2)
+install.packages(tidyverse)
+library(tidyverse)
+```
+
+
+
+```{r}
+#reading the required data into R
+data <- read.xlsx("data.xlsx", sheet = "Country Ratings, Statuses ",  startRow = 2, fillMergedCells = TRUE, colNames = TRUE , detectDates = TRUE)
+```
+
+
+```{r}
+data2 <- data[, -c(2:67)] # delete columns 2 through 67 to drop data that are not between 1995-2020
+```
+
+```{r}
+#replacing unique column names into year.[PR]/CL/Status names
+names(data2) <- gsub(x = names(data2), pattern = "\\.1", replacement = ".CL") 
+names(data2) <- gsub(x = names(data2), pattern = "\\.2", replacement = ".Status")
+```
+
+```{r}
+#DATA CLEANING
+
+#pivot data from wide to long except the first row
+data3 <-pivot_longer(data2, (!1), names_to = "Year", values_to = "Value")
+data3 <- rename(data3, "Countries" = "Year(s).Under.Review" ) 
+data3 <- data3[-c(1:78), ] #delete the first 78 rows as these values are NA formed from the pivot 
+data3$Category <- substr(data3$Year, 6, 7) #extract 6th and 7th sub-string from Year variable to get the particular category
+data3$Category[which(data3$Category == "St")] = "Status" #replace "St" with "Status" in Category variable
+data3$Category[which(data3$Category == "")] = "PR" #replace "" with "PR" in Category variable
+```
+
+```{r}
+#FINAL DATASET CREATION
+
+#create final data set with clean variable names and re-pivot the table to a wide table
+finaldata <- pivot_wider(data3, names_from = Category, values_from = Value)
+#delete the unnecessary strings from the Year variable and only keep the year value
+finaldata$Year <- substr(finaldata$Year, 1, 4) 
+
+#change necessary character data types into numeric data types
+finaldata$Year <- as.numeric(finaldata$Year) 
+finaldata$PR <- as.numeric(finaldata$PR)
+finaldata$CL <- as.numeric(finaldata$CL)
+
+#create a new variable 'Year.Range' with 5 year-interval periods
+finaldata$Year.Range = cut(finaldata$Year,seq(1995,2025,5), right = FALSE, left = TRUE) #included 2020-2025 as a category to not miss the 2020 observations
+```
+
+
+```{r}
+#create a graph of share of free, partially free or not free countries in a time interval of 5 years for 1995-20
+finaldata%>%
+  filter(Status != '-')%>% # remove countries whose data is missing but we include them 
+  drop_na(Status)%>% #removing NAs that emerged after data transfiguration
+  ggplot(aes(Year.Range, fill = Status))+
+  geom_bar(position = "dodge", alpha = 0.65)+
+  theme_bw()+
+  labs(title = "Share of Free (F), Partially Free (PF) or Not Free (NF) Countries", subtitle = "From 1995-2020", x= "5-Year Intervals: 1995-2020",
+       y = "Count", caption = "Source: Country and Territory Ratings and Statuses Data, 1973-2021, Freedom House")
+```
+
+```{r}
+unique <- unique(finaldata[c("Countries","Year")]) #create a unique dataset with Countries, Year combination
+PRdata<- merge(unique, finaldata[,c("Countries", "Year" , "PR")], by = c("Countries", "Year")) #merge the unique dataset with the finaldata set for PR values
+PRdata <- na.omit(PRdata)
+
+#Repeat the same steps for CL values
+CLdata<- merge(unique, finaldata[,c("Countries", "Year" , "CL")], by = c("Countries", "Year")) #merge the unique dataset with the finaldata set for CL values
+CLdata <- na.omit(CLdata)
+
+Statusdata<- merge(unique, finaldata[,c("Countries", "Year" , "Status")], by = c("Countries", "Year")) #merge the unique dataset with the finaldata set for Status values
+Statusdata <- na.omit(Statusdata)
+
+#merge all 3 datasets into FiW dataset
+FiWdata<- merge(PRdata, CLdata, by = c("Countries", "Year"))
+FiW<- merge(FiWdata, Statusdata, by = c("Countries", "Year"))
+
+#create new index variable for the Freedom in the World index which is the average of PR and CL, scaled
+FiW$Index <- (round((7 - (rowMeans(FiW[,c('PR', 'CL')], na.rm=TRUE))) / (7-1), 3)) #scaling by using the 
+#following formula: ((e_max - average)/ (e_max - e_min))
+
+```
+
+```{r}
+#create dummy variable for improvement relative to previous year 
+FiW <- FiW %>%
+  group_by(Countries) %>%
+  mutate(improv = ifelse(Index > lag(Index), 1, 0))
+```
+
+```{r}
+#create dummy variable for worsening relative to previous year 
+FiW <- FiW %>%
+  group_by(Countries) %>%
+  mutate(worse = ifelse(Index < lag(Index), 1, 0))
+```
+
+```{r}
+#change NA values to 0 for the dummy variables for convenience, this does not in any way skew our analysis or graph as we are only concerned with dummy variables 
+FiW$improv[is.na(FiW$improv)] <- 0
+FiW$worse[is.na(FiW$worse)] <- 0
+```
+
+```{r}
+#create a new dataset 'countdata' that groups by year and calculates the count of better-off and worse-off countries for each year
+countdata <- 
+  FiW %>%
+  group_by(Year) %>%
+  summarise(worsecount = sum(worse), improvcount = sum(improv))
+```
+
+```{r}
+#create a line plot of yearly trends of improvements versus deterioration of freedom
+ggplot(data = countdata, aes(x = Year)) +
+  geom_line(aes(y = worsecount, colour = "Deterioration")) +
+  geom_line(aes(y = improvcount, colour = "Improvement")) +
+  scale_colour_manual("", 
+                      breaks = c("Deterioration", "Improvement"),
+                      values = c("red", "green")) +
+  xlab('Years: 1995-2020') + theme_bw()+
+  ylab('Count')+ labs(title = "Yearly Trends of Improvements versus Deterioration of Freedom", subtitle = "From 1995-2020",   caption = "Source: Country and Territory Ratings and Statuses Data, 1973-2021, Freedom House")
+```
+
+
+```{r}
+#install and call package countrycode for merging two datasets based on country codes 
+install.packages("countrycode")
+library(countrycode)
+```
+```{r}
+#read the required UN data into R
+undata <- read.xlsx("undata.xlsx", startRow = 1, fillMergedCells = TRUE, colNames = TRUE , detectDates = TRUE)
+colnames(undata)[which(names(undata) == "Country.or.Area")] <- "Countries"
+```
+
+```{r}
+#create a new variable code in 'finaldata' dataset with ISO 3-C coding classification system
+FiW$code <- countrycode(FiW$Countries, "country.name", "iso3c")
+undata$code <- countrycode(undata$Countries, "country.name", "iso3c")
+```
+```{r}
+#merge the undata and FiWdata 
+mergeddata <- merge(FiW, undata, by= c("code"))
+```
+
+```{r}
+# use subset function to create a dataset exclusively for years 2005 and 2020
+  yearsub <- subset(mergeddata, Year == 2005 | Year == 2020)
+#create a graph that compares status levels across regions for 2005 and 2020
+  yearsub %>%
+  drop_na(Status)%>% 
+  ggplot(aes(Year, fill = Status)) + theme_bw() +
+  geom_bar(position = "dodge", width = 10) + facet_wrap(Region.Name~.) + 
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) + 
+  labs(x = "2005 (L) versus 2020 (R)" , y = "Status Total", title = "Global Freedom Status", subtitle = "From 1995-2020",  caption = "Source: Freedome House Country and Territory Ratings and Statuses Data & United Nations Geoscheme Data")
+```
+```{r}
+#rename the required column to 'LDC'
+colnames(mergeddata)[which(names(mergeddata) == "Least.Developed.Countries.(LDC)")] <- "LDC" 
+#subset average value of index for LDC's and other countries 
+averageindex <- mergeddata %>%
+  group_by(Year, LDC) %>%
+  summarise(avgindex = mean(Index), n = n())
+```
+
+
+```{r}
+#dummy code variable LDC for a clean graph
+averageindex <- averageindex %>%
+    mutate(LDC = ifelse(LDC == "x", 1, 0))
+```
+
+```{r}
+averageindex$LDC <- factor(averageindex$LDC) #change the numeric LDC variable into factor data type
+#create a 
+ggplot(data = averageindex) + theme_bw()+
+  geom_line(aes(x = Year, y = avgindex, colour = LDC, group = LDC)) + labs(y = "Average Index Score", x = "Years: 1995-2020", title = "LDC and Non-LDC Average FiW Scores") + theme_bw()+
+  scale_color_manual(labels = c("Non-LDC", "LDC"), values = c("blue", "red")) +labs(subtitle = "From 1995-2020",   caption = "Source: Freedom House Country and Territory Ratings and Statuses Data & United Nations Geoscheme Data")
+```
+
+
