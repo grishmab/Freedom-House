@@ -2,7 +2,7 @@
 title: "Freedom House Data Visualization"
 author: "Grishma Bhattarai"
 date: "2/17/2022"
-output: pdf_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
