@@ -12,13 +12,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 #installing and calling all the necessary packages 
-install.packages("openxlsx")
+#install.packages("openxlsx")
 library(openxlsx)
-install.packages(tidyr) 
+#install.packages(tidyr) 
 library("tidyr")
-install.packages("reshape2") 
+#install.packages("reshape2") 
 library(reshape2)
-install.packages(tidyverse)
+#install.packages(tidyverse)
 library(tidyverse)
 ```
 
@@ -147,7 +147,7 @@ ggplot(data = countdata, aes(x = Year)) +
 
 ```{r}
 #install and call package countrycode for merging two datasets based on country codes 
-install.packages("countrycode")
+#install.packages("countrycode")
 library(countrycode)
 ```
 ```{r}
