@@ -72,7 +72,7 @@ finaldata$Year.Range = cut(finaldata$Year,seq(1995,2025,5), right = FALSE, left 
 
 ```{r}
 #create a graph of share of free, partially free or not free countries in a time interval of 5 years for 1995-20
-finaldata%>%
+plot1<- finaldata%>%
   filter(Status != '-')%>% # remove countries whose data is missing but we include them 
   drop_na(Status)%>% #removing NAs that emerged after data transfiguration
   ggplot(aes(Year.Range, fill = Status))+
@@ -80,6 +80,7 @@ finaldata%>%
   theme_bw()+
   labs(title = "Share of Free (F), Partially Free (PF) or Not Free (NF) Countries", subtitle = "From 1995-2020", x= "5-Year Intervals: 1995-2020",
        y = "Count", caption = "Source: Country and Territory Ratings and Statuses Data, 1973-2021, Freedom House")
+plot1
 ```
 
 ```{r}
@@ -134,7 +135,7 @@ countdata <-
 
 ```{r}
 #create a line plot of yearly trends of improvements versus deterioration of freedom
-ggplot(data = countdata, aes(x = Year)) +
+plot2 <-ggplot(data = countdata, aes(x = Year)) +
   geom_line(aes(y = worsecount, colour = "Deterioration")) +
   geom_line(aes(y = improvcount, colour = "Improvement")) +
   scale_colour_manual("", 
@@ -142,6 +143,7 @@ ggplot(data = countdata, aes(x = Year)) +
                       values = c("red", "green")) +
   xlab('Years: 1995-2020') + theme_bw()+
   ylab('Count')+ labs(title = "Yearly Trends of Improvements versus Deterioration of Freedom", subtitle = "From 1995-2020",   caption = "Source: Country and Territory Ratings and Statuses Data, 1973-2021, Freedom House")
+plot2
 ```
 
 
@@ -170,12 +172,13 @@ mergeddata <- merge(FiW, undata, by= c("code"))
 # use subset function to create a dataset exclusively for years 2005 and 2020
   yearsub <- subset(mergeddata, Year == 2005 | Year == 2020)
 #create a graph that compares status levels across regions for 2005 and 2020
-  yearsub %>%
+plot3<-  yearsub %>%
   drop_na(Status)%>% 
   ggplot(aes(Year, fill = Status)) + theme_bw() +
   geom_bar(position = "dodge", width = 10) + facet_wrap(Region.Name~.) + 
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) + 
   labs(x = "2005 (L) versus 2020 (R)" , y = "Status Total", title = "Global Freedom Status", subtitle = "From 1995-2020",  caption = "Source: Freedome House Country and Territory Ratings and Statuses Data & United Nations Geoscheme Data")
+plot3
 ```
 ```{r}
 #rename the required column to 'LDC'
@@ -195,10 +198,18 @@ averageindex <- averageindex %>%
 
 ```{r}
 averageindex$LDC <- factor(averageindex$LDC) #change the numeric LDC variable into factor data type
-#create a 
-ggplot(data = averageindex) + theme_bw()+
+#create a line plot
+plot4<- ggplot(data = averageindex) + theme_bw()+
   geom_line(aes(x = Year, y = avgindex, colour = LDC, group = LDC)) + labs(y = "Average Index Score", x = "Years: 1995-2020", title = "LDC and Non-LDC Average FiW Scores") + theme_bw()+
   scale_color_manual(labels = c("Non-LDC", "LDC"), values = c("blue", "red")) +labs(subtitle = "From 1995-2020",   caption = "Source: Freedom House Country and Territory Ratings and Statuses Data & United Nations Geoscheme Data")
+plot4
 ```
 
+```{r}
+#saving high quality plots
+ggsave(plot1, file="plot1.png", width = 10, height= 6)
+ggsave(plot2, file="plot2.png", width = 10, height= 6)
+ggsave(plot3, file="plot3.png", width = 10, height= 6)
+ggsave(plot4, file="plot4.png", width = 10, height= 6)
+```
 
